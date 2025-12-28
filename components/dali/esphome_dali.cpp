@@ -1,5 +1,6 @@
 #include <esphome.h>
 #include <esp_task_wdt.h>
+#include <esp_timer.h>
 #include "esphome_dali.h"
 #include "esphome_dali_light.h"
 
@@ -9,12 +10,13 @@ static const bool DEBUG_LOG_RXTX = false; // NOTE: Will probably trigger WDT
 using namespace esphome;
 using namespace dali;
 
-void DaliBusComponent::setup() {
-    m_txPin->pin_mode(gpio::Flags::FLAG_OUTPUT);
-    m_rxPin->pin_mode(gpio::Flags::FLAG_INPUT);
-    DALI_LOGI("DALI bus ready");
-
-    if (m_discovery) {
+void DaliBusComponent::run_discovery() {
+    if (!m_discovery) {
+        DALI_LOGW("Discovery not enabled in config");
+        return;
+    }
+    
+    DALI_LOGI("Starting DALI bus discovery...");
         // Optional: reset devices on the bus so we are in a known-good state.
         // Can help if devices are not responding to anything.
         if (false) {
@@ -49,10 +51,41 @@ void DaliBusComponent::setup() {
             dali.bus_manager.terminate();
 
             // Seem to need a delay to allow time for devices to randomize...
-            delay(50);
+            vTaskDelay(pdMS_TO_TICKS(50));
         }
 
         DALI_LOGI("Begin device discovery...");
+        
+        uint8_t count = 0;
+        
+        // For DiscoverOnly mode with pre-configured devices, poll short addresses
+        if (this->m_initialize_addresses == DaliInitMode::DiscoverOnly) {
+            DALI_LOGI("Polling short addresses 0-63...");
+            
+            for (short_addr_t addr = 0; addr <= ADDR_SHORT_MAX; addr++) {
+                vTaskDelay(pdMS_TO_TICKS(1)); // yield to ESP stack
+                esp_task_wdt_reset();
+                
+                if (dali.isDevicePresent(addr)) {
+                    DALI_LOGI("  Found device @ %.2x", addr);
+                    
+                    // Dynamic component creation (if not defined in YAML)
+                    if (m_addresses[addr]) {
+                        DALI_LOGD("  Ignoring, already defined");
+                    }
+                    else {
+                        m_addresses[addr] = 0; // No long address for pre-configured devices
+                        create_light_component(addr, 0);
+                        count++;
+                    }
+                }
+            }
+            
+            DALI_LOGI("Discovery complete, found %d device(s)", count);
+            return;
+        }
+        
+        // For initialization modes, use random-address scanning
         dali.bus_manager.startAddressScan(); // All devices
 
         // Keep track of short addresses to detect duplicates
@@ -62,12 +95,11 @@ void DaliBusComponent::setup() {
             is_discovered[i] = false;
         }
 
-        uint8_t count = 0;
         short_addr_t short_addr = 0xFF;
         uint32_t long_addr = 0;
         while (dali.bus_manager.findNextAddress(short_addr, long_addr)) {
             count++;
-            delay(1); // yield to ESP stack
+            vTaskDelay(pdMS_TO_TICKS(1)); // yield to ESP stack
             esp_task_wdt_reset();
 
             // if (short_addr == 0xFF) {
@@ -170,9 +202,8 @@ void DaliBusComponent::setup() {
         if (duplicate_detected) {
             DALI_LOGW("Duplicate short addresses detected on the bus!");
             DALI_LOGW("  Devices may report inconsistent capabilities.");
-            DALI_LOGW("  You should fix your address assignments.");
+            DALI_LOGW("  You should fix your address assignments!");
         }
-    }
 }
 
 void DaliBusComponent::create_light_component(short_addr_t short_addr, uint32_t long_addr) {
@@ -188,7 +219,7 @@ void DaliBusComponent::create_light_component(short_addr_t short_addr, uint32_t 
     // NOTE: Not freeing these strings, they will be owned by LightState.
 
     auto* light_state = new light::LightState { dali_light };
-    light_state->set_component_source("light");
+    light_state->set_component_source(LOG_STR("light"));
     App.register_light(light_state);
     App.register_component(light_state);
     light_state->set_name(name);
@@ -202,6 +233,16 @@ void DaliBusComponent::create_light_component(short_addr_t short_addr, uint32_t 
     // Make sure you set discovery: true, or specify a light component somewhere in your YAML!
     DALI_LOGE("Cannot add light component - not enabled");
 #endif
+}
+
+void DaliBusComponent::setup() {
+    m_txPin->pin_mode(gpio::Flags::FLAG_OUTPUT);
+    m_rxPin->pin_mode(gpio::Flags::FLAG_INPUT);
+    DALI_LOGI("DALI bus ready");
+
+    if (m_discovery) {
+        run_discovery();
+    }
 }
 
 void DaliBusComponent::loop() {
@@ -219,10 +260,10 @@ void DaliBusComponent::dump_config() {
 void DaliBusComponent::writeBit(bool bit) {
     // NOTE: output is inverted - HIGH will pull the bus to 0V (logic low)
     bit = !bit;
-    m_txPin->digital_write(bit ? LOW : HIGH);
-    delayMicroseconds(HALF_BIT_PERIOD-6);
-    m_txPin->digital_write(bit ? HIGH : LOW);
-    delayMicroseconds(HALF_BIT_PERIOD-6);
+    m_txPin->digital_write(!bit);
+    esp_rom_delay_us(HALF_BIT_PERIOD-6);
+    m_txPin->digital_write(bit);
+    esp_rom_delay_us(HALF_BIT_PERIOD-6);
 }
 
 void DaliBusComponent::writeByte(uint8_t b) {
@@ -237,16 +278,16 @@ uint8_t DaliBusComponent::readByte() {
     for (int i = 0; i < 8; i++) {
         byte <<= 1;
         byte |= m_rxPin->digital_read();
-        delayMicroseconds(BIT_PERIOD); // 1/1200 seconds
+        esp_rom_delay_us(BIT_PERIOD);
     }
     return byte;
 }
 
 void DaliBusComponent::resetBus() {
     DALI_LOGD("Resetting bus");
-    m_txPin->digital_write(HIGH);
-    delay(1000);
-    m_txPin->digital_write(LOW);
+    m_txPin->digital_write(true);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    m_txPin->digital_write(false);
 }
 
 void DaliBusComponent::sendForwardFrame(uint8_t address, uint8_t data) {
@@ -263,24 +304,22 @@ void DaliBusComponent::sendForwardFrame(uint8_t address, uint8_t data) {
         writeBit(1); // START bit
         writeByte(address);
         writeByte(data);
-        m_txPin->digital_write(LOW);
+        m_txPin->digital_write(false);
     }
 
     // Non critical delay
-    delayMicroseconds(HALF_BIT_PERIOD*2);
-    delayMicroseconds(BIT_PERIOD*4); // Optional, for clarity in scope trace
+    esp_rom_delay_us(HALF_BIT_PERIOD*2);
+    esp_rom_delay_us(BIT_PERIOD*4);
 }
 
 uint8_t DaliBusComponent::receiveBackwardFrame(unsigned long timeout_ms) {
     uint8_t data;
 
-    unsigned long startTime = millis();
-    uint32_t startMicros = micros();
+    int64_t startTime = esp_timer_get_time();
 
     // Wait for START bit (timing critical)
-    // TODO: Need a better way to wait for this that doens't block the CPU
-    while (m_rxPin->digital_read() == LOW) {
-        if (millis() - startTime >= timeout_ms) {
+    while (m_rxPin->digital_read() == false) {
+        if ((esp_timer_get_time() - startTime) / 1000 >= timeout_ms) {
             //Serial.println("No reply");
             if (DEBUG_LOG_RXTX) {
                 DALI_LOGD("RX: 00 (NACK)");
@@ -293,10 +332,10 @@ uint8_t DaliBusComponent::receiveBackwardFrame(unsigned long timeout_ms) {
         // This is timing critical
         InterruptLock lock;
 
-        delayMicroseconds(BIT_PERIOD); // Wait for first data bit
-        delayMicroseconds(QUARTER_BIT_PERIOD); // Wait a quater bit period to sample middle of first half bit
+        esp_rom_delay_us(BIT_PERIOD);
+        esp_rom_delay_us(QUARTER_BIT_PERIOD);
         data = readByte();
-        delayMicroseconds(BIT_PERIOD*2); // Wait for STOP bits
+        esp_rom_delay_us(BIT_PERIOD*2);
     }
 
     //Serial.print("RX: "); Serial.println(data, HEX);
@@ -305,6 +344,6 @@ uint8_t DaliBusComponent::receiveBackwardFrame(unsigned long timeout_ms) {
     }
 
     // Minimum time before we can send another forward frame
-    delayMicroseconds(BIT_PERIOD*8); 
+    esp_rom_delay_us(BIT_PERIOD*8);
     return data;
 }

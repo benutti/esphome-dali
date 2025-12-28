@@ -1,7 +1,6 @@
 #include "dali.h"
-#include <Arduino.h>
-#if defined(ARDUINO)
 
+// ESP-IDF implementation
 #define QUARTER_BIT_PERIOD 208
 #define HALF_BIT_PERIOD 416
 #define BIT_PERIOD 833
@@ -9,10 +8,10 @@
 void DaliSerialBitBangPort::writeBit(bool bit) {
     // NOTE: output is inverted - HIGH will pull the bus to 0V (logic low)
     bit = !bit;
-    digitalWrite(m_txPin, bit ? LOW : HIGH);
-    delayMicroseconds(HALF_BIT_PERIOD-6);
-    digitalWrite(m_txPin, bit ? HIGH : LOW);
-    delayMicroseconds(HALF_BIT_PERIOD-6);
+    gpio_set_level((gpio_num_t)m_txPin, bit ? 0 : 1);
+    esp_rom_delay_us(HALF_BIT_PERIOD-6);
+    gpio_set_level((gpio_num_t)m_txPin, bit ? 1 : 0);
+    esp_rom_delay_us(HALF_BIT_PERIOD-6);
 }
 
 void DaliSerialBitBangPort::writeByte(uint8_t b) {
@@ -26,51 +25,53 @@ uint8_t DaliSerialBitBangPort::readByte() {
     uint8_t byte = 0;
     for (int i = 0; i < 8; i++) {
         byte <<= 1;
-        byte |= digitalRead(m_rxPin);
-        delayMicroseconds(BIT_PERIOD); // 1/1200 seconds
+        byte |= gpio_get_level((gpio_num_t)m_rxPin);
+        esp_rom_delay_us(BIT_PERIOD);
     }
     return byte;
 }
 
 void DaliSerialBitBangPort::sendForwardFrame(uint8_t address, uint8_t data) {
-    //Serial.print("TX: "); Serial.print(address, HEX); Serial.print(" "); Serial.println(data, HEX);
-
-    writeBit(1); // START bit
+    // Start bit
+    writeBit(1);
     writeByte(address);
     writeByte(data);
-    digitalWrite(m_txPin, LOW);
-    delayMicroseconds(HALF_BIT_PERIOD*2);
-    delayMicroseconds(BIT_PERIOD*4); // Optional, for clarity in scope trace
+    // Set line to idle for stop bits
+    gpio_set_level((gpio_num_t)m_txPin, 0);
+    esp_rom_delay_us(BIT_PERIOD*4); // Stop bits and settling time
 }
 
-// void sendForwardFrameV2(uint8_t address, uint16_t data) {
-//     //Serial.print("TX: "); Serial.print(address, HEX); Serial.print(" "); Serial.println(data, HEX);
-
-//     daliWriteBit(1); // START bit
-//     daliWriteByte(address);
-//     daliWriteByte((data >> 8) & 0xFF);
-//     daliWriteByte(data& 0xFF);
-//     digitalWrite(m_txPin, LOW);
-//     delayMicroseconds(416*6);
-// }
-
 uint8_t DaliSerialBitBangPort::receiveBackwardFrame(unsigned long timeout_ms) {
-    unsigned long startTime = millis();
-    // Wait for START bit
-    while (digitalRead(m_rxPin) == LOW) {
-        if (millis() - startTime >= timeout_ms) {
-            //Serial.println("No reply");
+    int64_t startTime = esp_timer_get_time();
+    
+    // Wait for bus to be idle (HIGH) first
+    while (gpio_get_level((gpio_num_t)m_rxPin) == 0) {
+        if ((esp_timer_get_time() - startTime) >= (timeout_ms * 1000)) {
             return 0;
         }
     }
-    delayMicroseconds(BIT_PERIOD); // Wait for first data bit
-    delayMicroseconds(QUARTER_BIT_PERIOD); // Wait a quater bit period to sample middle of first half bit
-    uint8_t data = readByte();
-    delayMicroseconds(BIT_PERIOD*2); // Wait for STOP bits
-    //Serial.print("RX: "); Serial.println(data, HEX);
-
-    delayMicroseconds(BIT_PERIOD*8); // Minimum time before we can send another forward frame
+    
+    // Wait for start bit (HIGH to LOW transition)
+    while (gpio_get_level((gpio_num_t)m_rxPin) != 0) {
+        if ((esp_timer_get_time() - startTime) >= (timeout_ms * 1000)) {
+            return 0;
+        }
+    }
+    
+    // Now at start of start bit (LOW), wait to middle of first data bit
+    // Start bit = 1 TE low + 1 TE high = 833us total
+    // First data bit starts at 833us, middle is at 833us + 416us = 1249us
+    esp_rom_delay_us(BIT_PERIOD + HALF_BIT_PERIOD);
+    
+    // Read 8 data bits (Manchester encoded: read at bit midpoint)
+    uint8_t data = 0;
+    for (int i = 0; i < 8; i++) {
+        data <<= 1;
+        // Manchester: bit value is the level in second half of bit period
+        // We're reading at the transition point which gives us the data value
+        data |= gpio_get_level((gpio_num_t)m_rxPin) ? 1 : 0;
+        esp_rom_delay_us(BIT_PERIOD);
+    }
+    
     return data;
 }
-
-#endif

@@ -31,6 +31,8 @@ class DaliLight : public light::LightOutput, public Component {
         , dali_level_range_(254.0f)
         , color_mode_()
         , brightness_curve_()
+        , light_state_(nullptr)
+        , state_synced_(false)
     { }
 
     light::LightTraits get_traits() override;
@@ -78,6 +80,8 @@ class DaliLight : public light::LightOutput, public Component {
     optional<DaliLedDimmingCurve> brightness_curve_;
 
     bool tc_supported_;
+    light::LightState *light_state_;
+    bool state_synced_;
     
 };
 

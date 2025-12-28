@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include "dali.h"
 
-#define DALI_TX_PIN 15
-#define DALI_RX_PIN 14
+#define DALI_TX_PIN 6
+#define DALI_RX_PIN 3
 
 
 DaliSerialBitBangPort dali_serial { DALI_TX_PIN, DALI_RX_PIN };

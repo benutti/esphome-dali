@@ -37,6 +37,9 @@ public:
     /// @note
     void do_initialize_addresses(DaliInitMode mode = DaliInitMode::InitializeUnassigned) { m_initialize_addresses = mode; }
 
+    /// @brief Run device discovery scan manually (can be called after boot)
+    void run_discovery();
+
     // NOTE: Must have a higher priority number than the components that depend on this.
     // ie, this must be initialized first.
     float get_setup_priority() const override { return setup_priority::HARDWARE; }

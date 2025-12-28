@@ -14,6 +14,7 @@ static const char *const TAG = "dali.light";
 
 void dali::DaliLight::setup_state(light::LightState *state) {
     // Initialization code for DaliLight
+    this->light_state_ = state;
 
     // Exclude broadcast and group addresses
     if ((this->address_ != ADDR_BROADCAST) && ((this->address_ & ADDR_GROUP_MASK) == 0)) {
@@ -21,10 +22,18 @@ void dali::DaliLight::setup_state(light::LightState *state) {
         if (bus->dali.isDevicePresent(address_)) {
             ESP_LOGD(TAG, "DALI[%.2x] Is Present", address_);
 
-            this->dali_level_min_ = bus->dali.lamp.getMinLevel(address_);
-            this->dali_level_max_ = bus->dali.lamp.getMaxLevel(address_);
-            this->dali_level_range_ = (float)(dali_level_max_ - this->dali_level_min_ + 1);
-            ESP_LOGD(TAG, "Reported min:%d max:%d", this->dali_level_min_, this->dali_level_max_);
+            uint8_t query_min = bus->dali.lamp.getMinLevel(address_);
+            uint8_t query_max = bus->dali.lamp.getMaxLevel(address_);
+            
+            // Validate query results (0 or 255 typically indicate timeout/error)
+            if (query_min >= 1 && query_min <= 254 && query_max >= 1 && query_max <= 254 && query_max > query_min) {
+                this->dali_level_min_ = query_min;
+                this->dali_level_max_ = query_max;
+                this->dali_level_range_ = (float)(dali_level_max_ - this->dali_level_min_ + 1);
+                ESP_LOGD(TAG, "Reported min:%d max:%d", this->dali_level_min_, this->dali_level_max_);
+            } else {
+                ESP_LOGW(TAG, "DALI[%.2x] Invalid query response (min=%d max=%d), keeping defaults", address_, query_min, query_max);
+            }
 
             // NOTE: Some DALI controllers report their device type is LED(6) even though they do also support color temperature,
             // so let's explicitly check if they respond to this:
@@ -75,30 +84,33 @@ void dali::DaliLight::setup_state(light::LightState *state) {
             // bus->dali.lamp.setMinLevel(address_, 1);
             // bus->dali.lamp.setMaxLevel(address_, 254);
 
-            // Query the actual brightness level of the device and 
-            // ensure this is reflected in the ESPHome component itself...
-            LightStateRTCState lstate;
-            uint8_t current_level = bus->dali.lamp.getCurrentLevel(address_);
-            if (current_level != 0) {
-                // TODO: Do we need to take into account reported min/max brightness?
-                lstate.brightness = (current_level * (1.0f/255.0f));
-                ESP_LOGD(TAG, "Restore brightness level: %.2f", lstate.brightness);
-            }
+            // Schedule a delayed query to read the actual device state after boot.
+            // We update the light state **without** sending a DALI command, so we don't
+            // accidentally turn lights off during boot. Once synced, normal writes resume.
+            this->set_timeout("dali_state_sync", 1000, [this]() {
+                if (this->light_state_ == nullptr) return;
 
-            if (tc_supported_) {
-                uint16_t current_temperature = bus->dali.color.getColorTemperature(address_);
-                if (current_temperature != 0) {
-                    float mired = (float)current_temperature;
-                    // Need to convert mireds to 0..1 range
-                    lstate.color_temp = (current_temperature - dali_tc_coolest_) / (dali_tc_warmest_ - dali_tc_coolest_);
-                    ESP_LOGD(TAG, "Restore colour temperature: %.2f", lstate.color_temp);
+                uint8_t current_level = this->bus->dali.lamp.getCurrentLevel(this->address_);
+                ESP_LOGD(TAG, "DALI[%.2x] Delayed state query returned: %d", this->address_, current_level);
+
+                if (current_level <= 254) {
+                    float brightness = (current_level > 0) ? (current_level / DALI_MAX_BRIGHTNESS_F) : 0.0f;
+
+                    this->light_state_->current_values.set_brightness(brightness);
+                    this->light_state_->current_values.set_state(current_level > 0);
+                    this->light_state_->publish_state();
+
+                    ESP_LOGD(TAG, "DALI[%.2x] Synced from bus: level=%d brightness=%.2f", this->address_, current_level, brightness);
+                } else {
+                    ESP_LOGW(TAG, "DALI[%.2x] Delayed query returned invalid value (%d)", this->address_, current_level);
                 }
-            }
 
-            state->set_initial_state(lstate);
+                this->state_synced_ = true;
+            });
         }
         else {
             ESP_LOGW(TAG, "DALI device at addr %.2x not found!", address_);
+            this->state_synced_ = true; // Allow user commands even if the device wasn't detected
         }
 
         //bus->dali.dumpStatusForDevice(address_);
@@ -161,6 +173,12 @@ light::LightTraits dali::DaliLight::get_traits() {
 }
 
 void dali::DaliLight::write_state(light::LightState *state) {
+    // Skip sending commands until we've synced once, to avoid turning lights off at boot.
+    if (!this->state_synced_) {
+        ESP_LOGD(TAG, "DALI[%d] Ignoring command until initial sync", address_);
+        return;
+    }
+
     bool on;
     float brightness;
     float color_temperature;
@@ -198,10 +216,21 @@ void dali::DaliLight::write_state(light::LightState *state) {
         state->current_values_as_brightness(&brightness);
     }
 
-    int dali_brightness = static_cast<uint8_t>(brightness * this->dali_level_range_) + this->dali_level_min_ - 1;
+    // Safety: use defaults if member variables are corrupted
+    float range = this->dali_level_range_;
+    uint8_t min = this->dali_level_min_;
+    uint8_t max = this->dali_level_max_;
+    if (range <= 0.0f || min < 1 || min > 254 || max < 1 || max > 254 || max <= min) {
+      ESP_LOGW(TAG, "DALI[%d] Corrupted values (range=%.0f min=%d max=%d), using defaults", address_, range, min, max);
+      range = 254.0f;
+      min = 1;
+      max = 254;
+    }
+
+    int dali_brightness = static_cast<uint8_t>(brightness * range) + min - 1;
     if (dali_brightness < 1) dali_brightness = 1;
     if (dali_brightness > 254) dali_brightness = 254;
 
-    ESP_LOGD(TAG, "DALI[%d] B=%.2f (%d)", address_, brightness, dali_brightness);
+    ESP_LOGD(TAG, "DALI[%d] B=%.2f (%d) range=%.0f min=%d max=%d", address_, brightness, dali_brightness, range, min, max);
     bus->dali.lamp.setBrightness(address_, (uint8_t)dali_brightness);
 }

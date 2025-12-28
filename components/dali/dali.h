@@ -1,5 +1,12 @@
 #pragma once
 
+#include <cstdint>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_timer.h"
+#include "esp_rom_sys.h"
+
 #include <stdint.h>
 
 #if !defined(DALI_LOGD)
@@ -10,21 +17,6 @@ static const char *const TAG_DALI = "dali";
 #define DALI_LOGI(...) ESP_LOGI(TAG_DALI, __VA_ARGS__)
 #define DALI_LOGW(...) ESP_LOGW(TAG_DALI, __VA_ARGS__)
 #define DALI_LOGE(...) ESP_LOGE(TAG_DALI, __VA_ARGS__)
-#elif defined(ARDUINO)
-// TODO: fmt strings
-#include <Arduino.h>
-static void ard_log(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    char buf[64];
-    vsnprintf(buf, sizeof(buf), format, args);
-    Serial.println(buf);
-    va_end(args);
-}
-#define DALI_LOGD(...) ard_log(__VA_ARGS__)
-#define DALI_LOGI(...) ard_log(__VA_ARGS__)
-#define DALI_LOGW(...) ard_log(__VA_ARGS__)
-#define DALI_LOGE(...) ard_log(__VA_ARGS__)
 #else
 #define DALI_LOGD(...)
 #define DALI_LOGI(...)
@@ -339,8 +331,7 @@ public:
     }
 };
 
-#if defined(ARDUINO)
-/// @brief Bit-banged implementation of a DALI bus
+/// @brief Bit-banged implementation of a DALI bus using ESP-IDF
 class DaliSerialBitBangPort : public DaliPort {
 public:
     DaliSerialBitBangPort(int txPin, int rxPin)
@@ -359,7 +350,6 @@ private:
     int m_txPin;
     int m_rxPin;
 };
-#endif
 
 /// @brief Bus manager for handling bus addresses
 class DaliBusManager {

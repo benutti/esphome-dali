@@ -1,31 +1,21 @@
-#
-# Sample firmware for my ESP32 PoE ethernet dev board
-#
-# NOTE: Only IDF v4 / Arduino 2.0 support the RTL PHY. See:
-# https://github.com/esphome/feature-requests/issues/1462
-#
-
-substitutions:
-  device_name: dali_master
-  device_description: PoE DALI Master
-
 # https://esphome.io/components/esphome.html
+substitutions:
+  boot_state_sync: "true"    # set to false to skip the on-boot DALI state sync
+  dali_discovery: "false"    # Disable auto-discovery; we define lights manually
+
 esphome:
-  name: ${device_name}
-  comment: ${device_description}
-  name_add_mac_suffix: true
+  name: dalimaster
+  comment: DALI Master
+  name_add_mac_suffix: false
 
 esp32:
-  board: esp32dev
+  board: esp32-c6-devkitc-1
   framework:
-    type: arduino
+    type: esp-idf
 
-ethernet:
-  type: RTL8201
-  mdc_pin: GPIO23
-  mdio_pin: GPIO18
-  clk_mode: GPIO0_OUT
-  phy_addr: 0
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
 
 external_components:
   - source: 
@@ -40,38 +30,163 @@ web_server:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    password: "nutjes007"
 
 logger:
 
 light:
 - platform: dali
-  id: dali_light_broadcast
-  name: "DALI Light (All)"
-  restore_mode: RESTORE_DEFAULT_ON 
+  id: Gang_Beneden
+  name: "Gang Beneden"
+  address: 0x00
+  restore_mode: RESTORE_AND_OFF
 
-  # For UI display purposes only, match this with physical properties of the strip
-  cold_white_color_temperature: 4000K
-  warm_white_color_temperature: 2700K
+- platform: dali
+  id: SLK_B_K
+  name: "SLK B K"
+  address: 0x01
+  restore_mode: RESTORE_AND_OFF
 
-  # Set the brightness curve on the device
-  #brightness_curve: LOGARITHMIC # (default)
+- platform: dali
+  id: Berging
+  name: "Berging"
+  address: 0x02
+  restore_mode: RESTORE_AND_OFF
 
-  # Force a specific color mode, irrespective of what the device claims.
-  # NOTE: ESPHome doesn't support XY coords
-  color_mode: COLOR_TEMPERATURE # (default: auto detect)
+- platform: dali
+  id: Bed_K
+  name: "Bed K"
+  address: 0x03
+  restore_mode: RESTORE_AND_OFF
 
-  # Update the fade time/rate on the device
-  #fade_time: 1s  # ['500ms', '707ms', '1.0s', '1.4s', '2.0s', '2.8s', '4.0s', '5.7s', '8.0s', '11.3s', '16.0s', '22.6s', '32.0s', '45.3s', '1.1m', '1.5m']
-  #fade_rate: 7   # [357796, 253000, 178898, 126500, 89449, 63250, 44724, 31625, 22362, 15812, 11181, 7906, 5590, 3953, 2795]
+- platform: dali
+  id: Bed_B
+  name: "Bed B"
+  address: 0x04
+  restore_mode: RESTORE_AND_OFF
 
+- platform: dali
+  id: Gang_Boven
+  name: "Gang Boven"
+  address: 0x05
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Speelhoek_Lijn
+  name: "Speelhoek Lijn"
+  address: 0x06
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Zetel_K
+  name: "Zetel K"
+  address: 0x07
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Keuken_Links
+  name: "Keuken Links"
+  address: 0x08
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Keuken_Rechts
+  name: "Keuken Rechts"
+  address: 0x09
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Zetel_B
+  name: "Zetel B"
+  address: 0x0a
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Speelhoek_Muur
+  name: "Speelhoek Muur"
+  address: 0x0b
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Speelhoek_Raam
+  name: "Speelhoek Raam"
+  address: 0x0c
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Salon_Lijn_3
+  name: "Salon Lijn 3"
+  address: 0x0d
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Salon_Lijn_1
+  name: "Salon Lijn 1"
+  address: 0x0e
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Salon_Lijn_2
+  name: "Salon Lijn 2"
+  address: 0x0f
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Salon_Lijn_4
+  name: "Salon Lijn 4"
+  address: 0x10
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Bureau_Lijn
+  name: "Bureau Lijn"
+  address: 0x11
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Eettafel
+  name: "Eettafel"
+  address: 0x12
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: WC
+  name: "WC"
+  address: 0x13
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Keukenkast
+  name: "Keukenkast"
+  address: 0x14
+  restore_mode: RESTORE_AND_OFF
+
+- platform: dali
+  id: Keuken_Group
+  name: "Keuken"
+  address: 0x40
+
+- platform: dali
+  id: Salon_Group
+  name: "Salon Lijnen"
+  address: 0x41
+
+- platform: dali
+  id: Gang_Group
+  name: "Gang"
+  address: 0x42
 
 output:
 
 
+button:
+- platform: restart
+  name: "Restart Device"
+
+
 dali:
   id: dali_bus
-  tx_pin: 32
-  rx_pin: 33
-  discovery: true  # If set, dali_light components will automatically be created from devices found on the bus
-  initialize_addresses: true  # If set, unassigned devices will be automatically assigned an address
+  tx_pin: 14
+  rx_pin: 5
+  discovery: ${dali_discovery}  # If set, dali_light components will automatically be created from devices found on the bus
+  initialize_addresses: false  # If set, unassigned devices will be automatically assigned an address
