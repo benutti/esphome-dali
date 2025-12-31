@@ -1,6 +1,6 @@
 # https://esphome.io/components/esphome.html
 substitutions:
-  boot_state_sync: "true"    # set to false to skip the on-boot DALI state sync
+  boot_state_sync: "false"    # set to false to skip the on-boot DALI state sync
   dali_discovery: "false"    # Disable auto-discovery; we define lights manually
 
 esphome:
@@ -39,142 +39,166 @@ light:
   id: Gang_Beneden
   name: "Gang Beneden"
   address: 0x00
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: SLK_B_K
   name: "SLK B K"
   address: 0x01
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Berging
   name: "Berging"
   address: 0x02
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Bed_K
   name: "Bed K"
   address: 0x03
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Bed_B
   name: "Bed B"
   address: 0x04
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Gang_Boven
   name: "Gang Boven"
   address: 0x05
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Speelhoek_Lijn
   name: "Speelhoek Lijn"
   address: 0x06
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Zetel_K
   name: "Zetel K"
   address: 0x07
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Keuken_Links
   name: "Keuken Links"
   address: 0x08
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Keuken_Rechts
   name: "Keuken Rechts"
   address: 0x09
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Zetel_B
   name: "Zetel B"
   address: 0x0a
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Speelhoek_Muur
   name: "Speelhoek Muur"
   address: 0x0b
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Speelhoek_Raam
   name: "Speelhoek Raam"
   address: 0x0c
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Salon_Lijn_3
   name: "Salon Lijn 3"
   address: 0x0d
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Salon_Lijn_1
   name: "Salon Lijn 1"
   address: 0x0e
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Salon_Lijn_2
   name: "Salon Lijn 2"
   address: 0x0f
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Salon_Lijn_4
   name: "Salon Lijn 4"
   address: 0x10
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Bureau_Lijn
   name: "Bureau Lijn"
   address: 0x11
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Eettafel
   name: "Eettafel"
   address: 0x12
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: WC
   name: "WC"
   address: 0x13
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Keukenkast
   name: "Keukenkast"
   address: 0x14
-  restore_mode: RESTORE_AND_OFF
+  restore_mode: RESTORE_DEFAULT_OFF
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Keuken_Group
   name: "Keuken"
   address: 0x40
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Salon_Group
   name: "Salon Lijnen"
   address: 0x41
+  color_mode: BRIGHTNESS
 
 - platform: dali
   id: Gang_Group
   name: "Gang"
   address: 0x42
+  color_mode: BRIGHTNESS
 
 output:
 
@@ -183,6 +207,145 @@ button:
 - platform: restart
   name: "Restart Device"
 
+- platform: template
+  name: "Sync DALI States"
+  icon: "mdi:refresh"
+  on_press:
+    then:
+      - lambda: |-
+          auto lights = {
+            std::make_tuple(id(Gang_Beneden), 0x00, "Gang_Beneden"),
+            std::make_tuple(id(SLK_B_K), 0x01, "SLK_B_K"),
+            std::make_tuple(id(Berging), 0x02, "Berging"),
+            std::make_tuple(id(Bed_K), 0x03, "Bed_K"),
+            std::make_tuple(id(Bed_B), 0x04, "Bed_B"),
+            std::make_tuple(id(Gang_Boven), 0x05, "Gang_Boven"),
+            std::make_tuple(id(Speelhoek_Lijn), 0x06, "Speelhoek_Lijn"),
+            std::make_tuple(id(Zetel_K), 0x07, "Zetel_K"),
+            std::make_tuple(id(Keuken_Links), 0x08, "Keuken_Links"),
+            std::make_tuple(id(Keuken_Rechts), 0x09, "Keuken_Rechts"),
+            std::make_tuple(id(Zetel_B), 0x0a, "Zetel_B"),
+            std::make_tuple(id(Speelhoek_Muur), 0x0b, "Speelhoek_Muur"),
+            std::make_tuple(id(Speelhoek_Raam), 0x0c, "Speelhoek_Raam"),
+            std::make_tuple(id(Salon_Lijn_3), 0x0d, "Salon_Lijn_3"),
+            std::make_tuple(id(Salon_Lijn_1), 0x0e, "Salon_Lijn_1"),
+            std::make_tuple(id(Salon_Lijn_2), 0x0f, "Salon_Lijn_2"),
+            std::make_tuple(id(Salon_Lijn_4), 0x10, "Salon_Lijn_4"),
+            std::make_tuple(id(Bureau_Lijn), 0x11, "Bureau_Lijn"),
+            std::make_tuple(id(Eettafel), 0x12, "Eettafel"),
+            std::make_tuple(id(WC), 0x13, "WC"),
+            std::make_tuple(id(Keukenkast), 0x14, "Keukenkast"),
+            std::make_tuple(id(Keuken_Group), 0x08, "Keuken_Group(reads_0x08)"),
+            std::make_tuple(id(Salon_Group), 0x0e, "Salon_Group(reads_0x0e)"),
+            std::make_tuple(id(Gang_Group), 0x00, "Gang_Group(reads_0x00)"),
+          };
+          int synced = 0;
+          for (auto &light : lights) {
+            uint8_t level = id(dali_bus).dali.lamp.getCurrentLevel(std::get<1>(light));
+            const char *name = std::get<2>(light);
+            // Accept 0..255 (255 = full brightness on some devices)
+            float brightness = 0.0f;
+            if (level == 0) {
+              brightness = 0.0f;
+            } else if (level >= 255) {
+              brightness = 1.0f; // clamp
+            } else {
+              brightness = (level / 254.0f);
+            }
+
+            // Update remote_values only to avoid sending DALI commands
+            std::get<0>(light)->remote_values.set_brightness(brightness);
+            std::get<0>(light)->remote_values.set_state(level > 0);
+            std::get<0>(light)->publish_state();
+            ESP_LOGD("dali.sync", "[0x%02x] %s -> level=%d brightness=%.2f", std::get<1>(light), name, level, brightness);
+            synced++;
+            delay(25);
+          }
+          ESP_LOGI("dali.sync", "Synced %d/24 lights from DALI bus", synced);
+
+- platform: template
+  name: "Scan DALI Bus"
+  icon: "mdi:magnify"
+  on_press:
+    then:
+      - lambda: |-
+          ESP_LOGI("dali.scan", "========== DALI BUS SCAN START ==========");
+          ESP_LOGI("dali.scan", "Scanning addresses 0x00-0x3F...\n");
+          
+          int device_count = 0;
+          std::vector<uint8_t> group_members[16];  // Track members for each group
+          
+          for (short_addr_t addr = 0; addr <= 63; addr++) {
+            vTaskDelay(pdMS_TO_TICKS(5));  // Small delay between queries
+            
+            if (id(dali_bus).dali.isDevicePresent(addr)) {
+              device_count++;
+              
+              // Device found - query it
+              uint8_t min_level = id(dali_bus).dali.lamp.getMinLevel(addr);
+              uint8_t max_level = id(dali_bus).dali.lamp.getMaxLevel(addr);
+              uint8_t current_level = id(dali_bus).dali.lamp.getCurrentLevel(addr);
+              
+              // Query group membership using DALI standard commands 0xC0 and 0xC1
+              // 0xC0 = QUERY GROUPS 0-7, 0xC1 = QUERY GROUPS 8-15
+              uint8_t groups_0_7 = id(dali_bus).dali.port.sendQueryCommand(addr, 0xC0);
+              uint8_t groups_8_15 = id(dali_bus).dali.port.sendQueryCommand(addr, 0xC1);
+              
+              std::string groups_str = "";
+              for (uint8_t i = 0; i < 8; i++) {
+                if (groups_0_7 & (1 << i)) {
+                  if (!groups_str.empty()) groups_str += ",";
+                  groups_str += std::to_string(i);
+                  group_members[i].push_back(addr);  // Track this device in group i
+                }
+              }
+              for (uint8_t i = 0; i < 8; i++) {
+                if (groups_8_15 & (1 << i)) {
+                  if (!groups_str.empty()) groups_str += ",";
+                  groups_str += std::to_string(i + 8);
+                  group_members[i + 8].push_back(addr);  // Track this device in group i+8
+                }
+              }
+              if (groups_str.empty()) groups_str = "none";
+              
+              // Print YAML config for this device
+              ESP_LOGI("dali.scan", "# Device found at address 0x%02X", addr);
+              ESP_LOGI("dali.scan", "# Levels: min=%d max=%d current=%d | Groups: %s", 
+                       min_level, max_level, current_level, groups_str.c_str());
+              ESP_LOGI("dali.scan", "- platform: dali");
+              ESP_LOGI("dali.scan", "  id: address_%02x", addr);
+              ESP_LOGI("dali.scan", "  name: \"address_%02x\"", addr);
+              ESP_LOGI("dali.scan", "  address: 0x%02x", addr);
+              ESP_LOGI("dali.scan", "  restore_mode: RESTORE_DEFAULT_OFF");
+              ESP_LOGI("dali.scan", "  color_mode: BRIGHTNESS");
+              ESP_LOGI("dali.scan", "");
+            }
+          }
+          
+          ESP_LOGI("dali.scan", "\n========== GROUP SUMMARY ==========");
+          for (uint8_t g = 0; g < 16; g++) {
+            if (!group_members[g].empty()) {
+              std::string members = "";
+              for (auto& member : group_members[g]) {
+                if (!members.empty()) members += ",";
+                members += "0x" + (member < 16 ? "0" : "") + std::string(1, "0123456789ABCDEF"[member >> 4]) + std::string(1, "0123456789ABCDEF"[member & 0x0F]);
+              }
+              short_addr_t group_addr = 0x40 + g;
+              ESP_LOGI("dali.scan", "Group %d (0x%02X): %s", g, group_addr, members.c_str());
+              ESP_LOGI("dali.scan", "# YAML for Group %d:", g);
+              ESP_LOGI("dali.scan", "- platform: dali");
+              ESP_LOGI("dali.scan", "  id: group_%d", g);
+              ESP_LOGI("dali.scan", "  name: \"Group %d\"", g);
+              ESP_LOGI("dali.scan", "  address: 0x%02x", group_addr);
+              ESP_LOGI("dali.scan", "  color_mode: BRIGHTNESS");
+              ESP_LOGI("dali.scan", "  # Members: %s", members.c_str());
+              ESP_LOGI("dali.scan", "");
+            }
+          }
+          
+          ESP_LOGI("dali.scan", "\n========== SCAN COMPLETE ==========");
+          ESP_LOGI("dali.scan", "Total devices found: %d/64", device_count);
+          ESP_LOGI("dali.scan", "Copy YAML config from logs above");
 
 dali:
   id: dali_bus

@@ -32,7 +32,6 @@ class DaliLight : public light::LightOutput, public Component {
         , color_mode_()
         , brightness_curve_()
         , light_state_(nullptr)
-        , state_synced_(false)
     { }
 
     light::LightTraits get_traits() override;
@@ -81,7 +80,6 @@ class DaliLight : public light::LightOutput, public Component {
 
     bool tc_supported_;
     light::LightState *light_state_;
-    bool state_synced_;
     
 };
 

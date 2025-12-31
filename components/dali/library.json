@@ -1,23 +1,17 @@
 {
-    "name": "dali",
-    "keywords": "protocol, iot",
-    "description": "Library for interfacing with DALI devices",
-    "license": "GPL3", 
-    "authors":
-    {
-        "name": "Jared Sanson",
+    "name": "esphome-dali",
+    "version": "1.0.0",
+    "description": "DALI master controller for ESP32 - provides digital addressable lighting interface via 1200 baud Manchester-encoded protocol",
+    "keywords": ["dali", "lighting", "control", "iot", "esphome", "esp32"],
+    "license": "GPL-3.0",
+    "authors": {
+        "name": "Benoit Jansen",
         "maintainer": true
     },
-    "dependencies": [
-    ],
-    
-    "version": "1.0.0",
-    "frameworks": [
-        "arduino"
-    ],
+    "frameworks": ["esp-idf"],
+    "platforms": "*",
     "build": {
         "srcDir": ".",
         "srcFilter": "+<*> -<esphome_*> -<output/> -<light/>"
-    },
-    "platforms": "*"
+    }
 }

@@ -35,82 +35,61 @@ void dali::DaliLight::setup_state(light::LightState *state) {
                 ESP_LOGW(TAG, "DALI[%.2x] Invalid query response (min=%d max=%d), keeping defaults", address_, query_min, query_max);
             }
 
-            // NOTE: Some DALI controllers report their device type is LED(6) even though they do also support color temperature,
-            // so let's explicitly check if they respond to this:
-            this->tc_supported_ = bus->dali.color.isTcCapable(address_);
-            if (tc_supported_) {
-                ESP_LOGD(TAG, "DALI[%.2x] Supports color temperature", address_);
+            // Color temperature support disabled - only brightness mode used
+            // If you need color temp, uncomment and set color_mode: COLOR_TEMPERATURE in YAML
+            // this->tc_supported_ = bus->dali.color.isTcCapable(address_);
 
-                // TODO: Don't seem to be getting the full range here?
-                // Tc(cool)=153, Tc(warm)=370
-                uint16_t coolest = bus->dali.color.queryParameter(address_, DaliColorParam::ColourTemperatureTcCoolest);
-                uint16_t warmest = bus->dali.color.queryParameter(address_, DaliColorParam::ColourTemperatureTcWarmest);
-
-                ESP_LOGD(TAG, "Tc(cool)=%d, Tc(warm)=%d", coolest, warmest);
-                if (coolest > COLOR_MIREK_WARMEST || warmest > COLOR_MIREK_WARMEST) {
-                    ESP_LOGW(TAG, "Tc min/max is out of range!");
-                } else {
-                    // Store reported coolest/warmest mired values for mapping.
-                    // NOTE: Not updating the configuration-provided warm/cool values, those are for UI only.
-                    // Ultimately we don't really want to trust the mired range reported by the dimmer
-                    // as it depends on the LED strip attached. So we map the UI range into the reported range.
-                    this->dali_tc_coolest_ = (float)coolest;
-                    //this->dali_tc_warmest_ = (float)warmest;
-                }
-            }
-            else {
-                ESP_LOGD(TAG, "Does not support color temperature");
-            }
-
-            ESP_LOGD(TAG, "Sending configuration to device...");
-
-            if (this->brightness_curve_.has_value()) {
-                switch (this->brightness_curve_.value()) {
-                    case DaliLedDimmingCurve::LOGARITHMIC: ESP_LOGD(TAG, "Setting brightness curve to LOGARITHMIC"); break;
-                    case DaliLedDimmingCurve::LINEAR:      ESP_LOGD(TAG, "Setting brightness curve to LINEAR"); break;
-                }
-                bus->dali.led.setDimmingCurve(address_, this->brightness_curve_.value());
-            }
-
-            if (this->fade_rate_.has_value()) {
-                ESP_LOGD(TAG, "Setting fade rate: %d", this->fade_rate_.value());
-                bus->dali.lamp.setFadeRate(0, this->fade_rate_.value());
-            }
-            if (this->fade_time_.has_value()) {
-                ESP_LOGD(TAG, "Setting fade time: %d", this->fade_time_.value());
-                bus->dali.lamp.setFadeTime(0, this->fade_time_.value());
-            }
-
-            // bus->dali.lamp.setMinLevel(address_, 1);
-            // bus->dali.lamp.setMaxLevel(address_, 254);
-
-            // Schedule a delayed query to read the actual device state after boot.
-            // We update the light state **without** sending a DALI command, so we don't
-            // accidentally turn lights off during boot. Once synced, normal writes resume.
+            // Schedule a delayed task to:
+            // 1. Read actual device state FIRST (without changing lights)
+            // 2. Send configuration commands AFTER syncing state
             this->set_timeout("dali_state_sync", 1000, [this]() {
                 if (this->light_state_ == nullptr) return;
 
+                // Step 1: Query current state from device
                 uint8_t current_level = this->bus->dali.lamp.getCurrentLevel(this->address_);
                 ESP_LOGD(TAG, "DALI[%.2x] Delayed state query returned: %d", this->address_, current_level);
 
-                if (current_level <= 254) {
-                    float brightness = (current_level > 0) ? (current_level / DALI_MAX_BRIGHTNESS_F) : 0.0f;
-
-                    this->light_state_->current_values.set_brightness(brightness);
-                    this->light_state_->current_values.set_state(current_level > 0);
-                    this->light_state_->publish_state();
-
-                    ESP_LOGD(TAG, "DALI[%.2x] Synced from bus: level=%d brightness=%.2f", this->address_, current_level, brightness);
+                // Accept 0..255 (255 = full brightness on some devices)
+                float brightness = 0.0f;
+                if (current_level == 0) {
+                    brightness = 0.0f;
+                } else if (current_level >= 255) {
+                    brightness = 1.0f; // clamp
                 } else {
-                    ESP_LOGW(TAG, "DALI[%.2x] Delayed query returned invalid value (%d)", this->address_, current_level);
+                    brightness = (current_level / DALI_MAX_BRIGHTNESS_F);
                 }
 
-                this->state_synced_ = true;
+                this->light_state_->current_values.set_brightness(brightness);
+                this->light_state_->current_values.set_state(current_level > 0);
+                this->light_state_->remote_values.set_brightness(brightness);
+                this->light_state_->remote_values.set_state(current_level > 0);
+                this->light_state_->publish_state();
+
+                ESP_LOGD(TAG, "DALI[%.2x] Synced from bus: level=%d brightness=%.2f", this->address_, current_level, brightness);
+
+                // Step 2: NOW send configuration commands (after state is synced)
+                ESP_LOGD(TAG, "DALI[%.2x] Sending configuration to device...", this->address_);
+
+                if (this->brightness_curve_.has_value()) {
+                    switch (this->brightness_curve_.value()) {
+                        case DaliLedDimmingCurve::LOGARITHMIC: ESP_LOGD(TAG, "Setting brightness curve to LOGARITHMIC"); break;
+                        case DaliLedDimmingCurve::LINEAR:      ESP_LOGD(TAG, "Setting brightness curve to LINEAR"); break;
+                    }
+                    this->bus->dali.led.setDimmingCurve(this->address_, this->brightness_curve_.value());
+                }
+
+                if (this->fade_rate_.has_value()) {
+                    ESP_LOGD(TAG, "Setting fade rate: %d", this->fade_rate_.value());
+                    this->bus->dali.lamp.setFadeRate(this->address_, this->fade_rate_.value());
+                }
+                if (this->fade_time_.has_value()) {
+                    ESP_LOGD(TAG, "Setting fade time: %d", this->fade_time_.value());
+                    this->bus->dali.lamp.setFadeTime(this->address_, this->fade_time_.value());
+                }
             });
         }
         else {
             ESP_LOGW(TAG, "DALI device at addr %.2x not found!", address_);
-            this->state_synced_ = true; // Allow user commands even if the device wasn't detected
         }
 
         //bus->dali.dumpStatusForDevice(address_);
@@ -173,48 +152,18 @@ light::LightTraits dali::DaliLight::get_traits() {
 }
 
 void dali::DaliLight::write_state(light::LightState *state) {
-    // Skip sending commands until we've synced once, to avoid turning lights off at boot.
-    if (!this->state_synced_) {
-        ESP_LOGD(TAG, "DALI[%d] Ignoring command until initial sync", address_);
-        return;
-    }
-
     bool on;
     float brightness;
-    float color_temperature;
-
-    static uint16_t last_temperature = 0;
 
     state->current_values_as_binary(&on);
     if (!on) {
-        // Short cut: send power off command
-        //bus->dali.lamp.turnOff(address_); // no fade
-        bus->dali.lamp.setBrightness(address_, 0); // fade
+        // User turned light OFF - send with fade
+        bus->dali.lamp.setBrightness(address_, 0);
         return;
     }
 
-    if (tc_supported_) {
-        state->current_values_as_ct(&color_temperature, &brightness);
-
-        // Map temperature 0..1 to reported TC coolest/warmest mireds
-        // NOTE: Not using the configuration warm/cool colours - these may not match the reported range of the DALI device.
-        float color_temperature_mired = (color_temperature * (dali_tc_warmest_ - dali_tc_coolest_)) + dali_tc_coolest_;
-
-        uint16_t dali_color_temperature = static_cast<uint16_t>(color_temperature_mired);
-
-        // Only update if temperature has changed, to allow faster brightness changes
-        if (dali_color_temperature != last_temperature) {
-            last_temperature = dali_color_temperature;
-
-            ESP_LOGD(TAG, "DALI[%d] Tc=%d", address_, dali_color_temperature);
-
-            // IMPORTANT: Do not set start_fade (activate), or the color temperature fade will
-            // be cancelled when we next call setBrightness, and no color change will occur.
-            bus->dali.color.setColorTemperature(address_, dali_color_temperature, false);
-        }
-    } else {
-        state->current_values_as_brightness(&brightness);
-    }
+    // Brightness-only mode
+    state->current_values_as_brightness(&brightness);
 
     // Safety: use defaults if member variables are corrupted
     float range = this->dali_level_range_;

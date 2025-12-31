@@ -225,7 +225,7 @@ void DaliBusComponent::create_light_component(short_addr_t short_addr, uint32_t 
     light_state->set_name(name);
     light_state->set_object_id(id);
     light_state->set_disabled_by_default(false);
-    light_state->set_restore_mode(light::LIGHT_RESTORE_DEFAULT_ON);
+    // NOTE: restore_mode is set by YAML config, not hardcoded here
     light_state->add_effects({});
 
     DALI_LOGI("Created light component '%s' (%s)", name, id);
